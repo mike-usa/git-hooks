@@ -1,0 +1,44 @@
+#!/bin/bash
+##
+## An hook script to verify what is about to be committed.
+## Called by "git commit" with no arguments.  The hook should
+## exit with non-zero status after issuing an appropriate message if
+## it wants to stop the commit.
+
+## use functions to localize variables for easy cleanup
+run(){
+  ## Amended from: https://stackoverflow.com/questions/32356457/git-pre-commit-hook-to-find-text-in-files
+  local debug=false # rudimentary debugging; set to `true` to output strings
+  local disallowed="<place space-separated words here>" # words to disallow in commits (like username, passwords, paths, etc)
+  ## TODO: make disallowed list an externally managed file suitable of multi-word phrases
+
+  ################################################################
+  ## 1. retrieve names of files staged for commit
+  ## 2. iterate over them 
+  ## 3. scan their content for disallowed words using `egrep`
+  git diff --cached --name-status | while read mode filename; do
+    $debug && echo "EVALUATING: \"$mode\" and \"$filename\""
+
+    ## EXAMPLE
+    ## ---------------------------------
+    ## $ git diff --cached --name-status
+    ## A       altered-file.md
+    ## M       modified-file.md
+    ## D       deleted-file.md
+
+    if [ "$mode" == 'D' ]; then continue; fi
+    for word in $disallowed
+    do
+      $debug && echo -e "  > Searching for \"$word\""
+      string_found=`egrep --color=yes -n $word $filename`
+      if [ -n "$string_found" ] ; then
+        echo -e "\nERROR: Disallowed expression \"${word}\" in file \"${filename}\""
+        echo -e "=======================================================\n$string_found"
+        echo -e "=======================================================\n"
+        exit 1
+      fi
+    done
+  done || exit $?
+}
+
+run
