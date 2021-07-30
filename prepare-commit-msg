@@ -7,19 +7,50 @@
 ## message file.  If the hook fails with a non-zero status,
 ## the commit is aborted.
 
+## Bash:
+##   -z checks for zero length string
+##   -n checks for non-zero length string
+##   ${VAR:+<anything>} if VAR is unset or an empty string ${} will always be zero-length
+## Git: 
+##   git commit -m"" ; $COMMIT_SOURCE == 'message' (command line)
+##   git commit      ; $COMMIT_SOURCE == ''        (editor)
+
 COMMIT_MSG_FILE=$1
 COMMIT_SOURCE=$2
 SHA1=$3
 
-## 1. Display diff as comments for reference when writing commit messages (stackoverflow sourced)
-RESULT="# Differences to be committed:"
-while IFS= read -r line
-do
-  RESULT+="$IFS#	$line"
-done <<< $(git diff --staged)
+## Important to capture the comment character if a custom one is used
+COMMENT_CHAR="$(git config --get core.commentChar)"
+[ -z ${COMMENT_CHAR:+unset} ] && COMMENT_CHAR="#"
 
-echo "$RESULT" >> $COMMIT_MSG_FILE
+
+## 1. Display diff as comments for reference when writing commit messages (stackoverflow sourced)
+## Add source code difference to commit message editor
+function add_diff_to_editor {
+
+
+  ## #${COMMIT_SOURCE:+x} will have '' (empty string) if using an editor
+  if [ -z ${COMMIT_SOURCE:+unset} ]; then
+    RESULT="${COMMENT_CHAR} Differences to be committed:"
+    while IFS= read -r line
+    do
+      RESULT+="$IFS${COMMENT_CHAR}	$line"
+    done <<< $(git diff --staged)
+
+    echo "$RESULT" >> $COMMIT_MSG_FILE
+  fi
+}
 
 
 ## 2. To conserve space, remove the "# Please enter the commit message..." help message (provided default)
-/usr/bin/perl -i.bak -ne 'print unless(m/^. Please enter the commit message/..m/^#$/)' "$COMMIT_MSG_FILE"
+function remove_default_instructions {
+  ## ${COMMIT_SOURCE:+x} will have 'message' if called from the command line
+  if [ -z ${COMMIT_SOURCE:+unset} ]; then
+    perl -i.bak -ne "print unless(m/^. Please enter the commit message/..m/^${COMMENT_CHAR}\$/)" "$COMMIT_MSG_FILE"
+  fi
+}
+
+add_diff_to_editor
+remove_default_instructions
+
+unset COMMENT_CHAR
